@@ -269,11 +269,13 @@
 					field[i].push(false);
 				}
 			}
-			console.log(field);
 
-			uField = new Array(field);
-			console.log(uField);
-			drawPosPattern(field, uField);
+			uField = new Array(...field);
+			drawTimingPatterns(field, uField, ver);
+			drawPosPatterns(field, uField, ver);
+			drawAlignmentPatterns(field, uField, ver);
+			drawVersion(field, uField, ver);
+			drawFormatBits(field, uField, 1, cor);
 			drawField(field, scale, ctx);
 		}
 
@@ -285,19 +287,140 @@
 					var xx = x + dx,
 						yy = y + dy;
 					if (0 <= xx && xx < size && 0 <= yy && yy < size) {
-						uField[xx][yy] = true;
+						uField[xx][yy] = 1;
 						if (dist != 2 && dist != 4) {
 							field[xx][yy] = true;
+						} else {
+							field[xx][yy] = false;
 						}
 					}
 				}
 			}
-			console.log(field);
 		}
 
-		function drawPosPattern(field, uField) {
+		function drawAlignmentPattern(field, uField, x, y) {
+			for (var dy = -2; dy <= 2; dy++) {
+				for (var dx = -2; dx <= 2; dx++) {
+					var dist = Math.max(Math.abs(dx), Math.abs(dy)); // Chebyshev/infinity norm
+					uField[x + dx][y + dy] = 2;
+					if (dist != 1) {
+						field[x + dx][y + dy] = true;
+					} else {
+						field[x + dx][y + dy] = false;
+					}
+				}
+			}
+		}
+
+		function drawPosPatterns(field, uField, ver) {
 			const size = field.length;
-			drawFinderPattern(field, uField, 0, 0);
+			drawFinderPattern(field, uField, 3, 3);
+			drawFinderPattern(field, uField, size - 4, 3);
+			drawFinderPattern(field, uField, 3, size - 4);
+		}
+
+		function drawAlignmentPatterns(field, uField, ver) {
+			const size = field.length;
+			var alignPatPos = getAlignmentPatternPositions(ver, size);
+			var numAlign = alignPatPos.length;
+			for (var i = 0; i < numAlign; i++) {
+				for (var j = 0; j < numAlign; j++) {
+					// Don't draw on the three finder corners
+					if (!(i == 0 && j == 0 || i == 0 && j == numAlign - 1 || i == numAlign - 1 && j == 0))
+						drawAlignmentPattern(field, uField, alignPatPos[i], alignPatPos[j]);
+				}
+			}
+		}
+
+		function drawVersion(field, uField, version) {
+			if (version < 7)
+				return;
+			const size = field.length;
+			// Calculate error correction code and pack bits
+			var rem = version; // version is uint6, in the range [7, 40]
+			for (var i = 0; i < 12; i++)
+				rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+			var bits = version << 12 | rem; // uint18
+			if (bits >>> 18 != 0)
+				throw "Assertion error";
+
+			// Draw two copies
+			for (var i = 0; i < 18; i++) {
+				var bit = getBit(bits, i);
+				var a = size - 11 + i % 3;
+				var b = Math.floor(i / 3);
+				uField[a][b] = uField[b][a] = 4;
+				field[a][b] = field[b][a] = bit;
+			}
+		}
+
+
+		function drawTimingPatterns(field, uField, ver) {
+			const size = field.length;
+			for (var i = 0; i < size; i++) {
+				uField[6][i] = 3;
+				uField[i][6] = 3;
+				if (i % 2 == 0) {
+					field[6][i] = true;
+					field[i][6] = true;
+				} else {
+					field[6][i] = false;
+					field[i][6] = false;
+				}
+			}
+		}
+
+		function drawFormatBits(field, uField, mask, cor) {
+			const size = field.length;
+			// Calculate error correction code and pack bits
+			var data = [1, 0, 3, 2][cor] << 3 | mask; // errCorrLvl is uint2, mask is uint3
+			var rem = data;
+			for (var i = 0; i < 10; i++)
+				rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+			var bits = (data << 10 | rem) ^ 0x5412; // uint15
+			if (bits >>> 15 != 0)
+				throw "Assertion error";
+			let debug = "";
+			for (let i = 0; i < 15; i++) {
+				debug += getBit(bits, i) ? "1" : 0;
+
+			}
+			console.log(debug);
+			// Draw first copy
+			for (var i = 0; i <= 5; i++) {
+				field[8][i] = getBit(bits, i);
+				uField[8][i] = 5;
+			}
+
+
+			uField[8][7] = uField[8][8] = uField[8][9] = 5;
+			field[8][7] = getBit(bits, 6);
+			field[8][8] = getBit(bits, 7);
+			field[8][9] = getBit(bits, 8);
+
+			for (var i = 9; i < 15; i++) {
+				uField[14 - i][8] = 5;
+				field[14 - i][8] = getBit(bits, i);
+			}
+
+			// Draw second copy
+			for (var i = 0; i < 8; i++) {
+				uField[size - 1 - i][8] = 5;
+				field[size - 1 - i][8] = getBit(bits, i);
+			}
+			for (var i = 8; i < 15; i++) {
+				uField[8][size - 15 + i] = 5;
+				field[8][size - 15 + i] = getBit(bits, i);
+			}
+			uField[8][size - 8] = 5;
+			field[8][size - 8] = true;
+		}
+
+		function drawFunctionPatterns() {
+
+			// Draw configuration data
+			drawFormatBits(0); // Dummy mask value; overwritten later in the constructor
+			drawVersion();
 		}
 
 		function drawField(field, scale, ctx) {
@@ -332,7 +455,7 @@
 						let filled = fillData(bin, ver, cor);
 						let blocks = blockify(filled, ver, cor);
 						let corrData = getCorrData(blocks, ver, cor);
-						drawCode(blocks, ver, cor, 10, document.getElementById('demo-code'))
+						drawCode(blocks, ver, cor, 5, document.getElementById('demo-code'))
 					});
 				</script>
 			</section>
@@ -365,14 +488,19 @@
 				<section>
 					<h4>Цифровое кодирование</h4>
 					<p style='font-size: 30px'>
-						Алгоритм: Этот тип кодирования требует 10 бит на 3 символа. Вся последовательность символов разбивается на
-						группы по 3 цифры, и каждая группа (трёхзначное число) переводится в 10-битное двоичное число и добавляется
-						к последовательности бит. Если общее количество символов не кратно 3, то если в конце остаётся 2 символа,
+						Алгоритм: Этот тип кодирования требует 10 бит на 3 символа. Вся последовательность символов
+						разбивается на
+						группы по 3 цифры, и каждая группа (трёхзначное число) переводится в 10-битное двоичное число и
+						добавляется
+						к последовательности бит. Если общее количество символов не кратно 3, то если в конце остаётся 2
+						символа,
 						полученное двузначное число кодируется 7 битами, а если 1 символ, то 4 битами.
 					</p>
-					<div id="2-2-input" class='edit' contenteditable="true" style="background-color: white; margin-bottom: 5px">
+					<div id="2-2-input" class='edit' contenteditable="true"
+						style="background-color: white; margin-bottom: 5px">
 					</div>
-					<div id="2-2-output" class='edit' style="background-color: grey; height: 160px; overflow-wrap: break-word;">
+					<div id="2-2-output" class='edit'
+						style="background-color: grey; height: 160px; overflow-wrap: break-word;">
 					</div>
 					<script>
 						$('#2-2-input').keyup((e) => {
@@ -400,16 +528,22 @@
 				<section>
 					<h4>Буквенно-цифровое кодирование</h4>
 					<p style='font-size: 20px'>
-						В этом случае на 2 символа требуется 11 бит информации. Входной поток символов разделяется на группы по 2, в
-						группе каждый символ кодируется согласно таблице внизу, значение первого символа в группе умножается на 45 и
-						прибавляется к значение второго символа. Полученное число переводится в 11-битное двоичное число и
-						добавляется к последовательности бит. Если в последней группе 1 символ, то его значение сразу кодируется
+						В этом случае на 2 символа требуется 11 бит информации. Входной поток символов разделяется на
+						группы по 2, в
+						группе каждый символ кодируется согласно таблице внизу, значение первого символа в группе
+						умножается на 45 и
+						прибавляется к значение второго символа. Полученное число переводится в 11-битное двоичное число
+						и
+						добавляется к последовательности бит. Если в последней группе 1 символ, то его значение сразу
+						кодируется
 						6-битным числом и добавляется к последовательности бит.
 					</p>
 					<img src='lib/images/symb_talbe.png' style='background: none; border: none; margin: 0'>
-					<div id="2-3-input" class='edit' contenteditable="true" style="background-color: white; margin-bottom: 5px">
+					<div id="2-3-input" class='edit' contenteditable="true"
+						style="background-color: white; margin-bottom: 5px">
 					</div>
-					<div id="2-3-output" class='edit' style="background-color: grey; height: 130px; overflow-wrap: break-word;">
+					<div id="2-3-output" class='edit'
+						style="background-color: grey; height: 130px; overflow-wrap: break-word;">
 					</div>
 					<script>
 						$('#2-3-input').keyup((e) => {
@@ -437,14 +571,19 @@
 				<section>
 					<h4>Побайтовое кодирование</h4>
 					<p style='font-size: 30px'>
-						Это универсальный способ кодирования, которым можно закодировать любые символы. Единственным недостатком
-						метода является относительно низкая плотность информации. В этом случае текст кодируется в любой кодировке
-						(Я буду использвать UTF-8, это значит что каждый символ будет занимать 8 или 16 бит) и полученная
+						Это универсальный способ кодирования, которым можно закодировать любые символы. Единственным
+						недостатком
+						метода является относительно низкая плотность информации. В этом случае текст кодируется в любой
+						кодировке
+						(Я буду использвать UTF-8, это значит что каждый символ будет занимать 8 или 16 бит) и
+						полученная
 						последовательность байт берётся в неизменном виде.
 					</p>
-					<div id="2-4-input" class='edit' contenteditable="true" style="background-color: white; margin-bottom: 5px">
+					<div id="2-4-input" class='edit' contenteditable="true"
+						style="background-color: white; margin-bottom: 5px">
 					</div>
-					<div id="2-4-output" class='edit' style="background-color: grey; height: 210px; overflow-wrap: break-word;">
+					<div id="2-4-output" class='edit'
+						style="background-color: grey; height: 210px; overflow-wrap: break-word;">
 					</div>
 					<script>
 						$('#2-4-input').keyup((e) => {
@@ -552,8 +691,8 @@
 					<p>Use the <em>Space</em> key to navigate through all slides.</p>
 					<br>
 					<a href="#" class="navigate-down">
-						<img width="178" height="238" data-src="https://s3.amazonaws.com/hakim-static/reveal-js/arrow.png"
-							alt="Down arrow">
+						<img width="178" height="238"
+							data-src="https://s3.amazonaws.com/hakim-static/reveal-js/arrow.png" alt="Down arrow">
 					</a>
 				</section>
 				<section>
@@ -566,8 +705,9 @@
 					<p>That's it, time to go back up.</p>
 					<br>
 					<a href="#/2">
-						<img width="178" height="238" data-src="https://s3.amazonaws.com/hakim-static/reveal-js/arrow.png"
-							alt="Up arrow" style="transform: rotate(180deg); -webkit-transform: rotate(180deg);">
+						<img width="178" height="238"
+							data-src="https://s3.amazonaws.com/hakim-static/reveal-js/arrow.png" alt="Up arrow"
+							style="transform: rotate(180deg); -webkit-transform: rotate(180deg);">
 					</a>
 				</section>
 			</section>
@@ -643,7 +783,8 @@
 					</p>
 					<p class="fragment fade-in-then-out">fade-in-then-out</p>
 					<p class="fragment fade-in-then-semi-out">fade-in-then-semi-out</p>
-					<p>Highlight <span class="fragment highlight-red">red</span> <span class="fragment highlight-blue">blue</span>
+					<p>Highlight <span class="fragment highlight-red">red</span> <span
+							class="fragment highlight-blue">blue</span>
 						<span class="fragment highlight-green">green</span></p>
 				</section>
 			</section>
@@ -709,8 +850,8 @@
 						color formats are supported.
 					</p>
 					<a href="#" class="navigate-down">
-						<img width="178" height="238" data-src="https://s3.amazonaws.com/hakim-static/reveal-js/arrow.png"
-							alt="Down arrow">
+						<img width="178" height="238"
+							data-src="https://s3.amazonaws.com/hakim-static/reveal-js/arrow.png" alt="Down arrow">
 					</a>
 				</section>
 				<section data-background="https://s3.amazonaws.com/hakim-static/reveal-js/image-placeholder.png">
