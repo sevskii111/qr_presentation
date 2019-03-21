@@ -29,6 +29,8 @@
 		document.getElementsByTagName('head')[0].appendChild(link);
 	</script>
 	<script src="lib/js/jquery.js"></script>
+	<script src="lib/js/tables.js"></script>
+	<script src="lib/js/external.js"></script>
 	<!--[if lt IE 9]>
 		<script src="lib/js/html5shiv.js"></script>
 		<![endif]-->
@@ -77,54 +79,7 @@
 			return result;
 		}
 
-		const mixConversionTable = {
-			"0": 0,
-			"1": 1,
-			"2": 2,
-			"3": 3,
-			"4": 4,
-			"5": 5,
-			"6": 6,
-			"7": 7,
-			"8": 8,
-			"9": 9,
-			"A": 10,
-			"B": 11,
-			"C": 12,
-			"D": 13,
-			"E": 14,
-			"F": 15,
-			"G": 16,
-			"H": 17,
-			"I": 18,
-			"J": 19,
-			"K": 20,
-			"L": 21,
-			"M": 22,
-			"N": 23,
-			"O": 24,
-			"P": 25,
-			"Q": 26,
-			"R": 27,
-			"S": 28,
-			"T": 29,
-			"U": 30,
-			"V": 31,
-			"W": 32,
-			"X": 33,
-			"Y": 34,
-			"Z": 35,
-			" ": 36,
-			"$": 37,
-			"%": 38,
-			"*": 39,
-			"+": 40,
-			"-": 41,
-			".": 42,
-			"/": 43,
-			":": 44,
-		}
-		const possibleMixSymbols = Object.keys(mixConversionTable);
+
 
 		function stringMix2Bin(str) {
 			str = str.toUpperCase();
@@ -195,11 +150,192 @@
 			}
 			return result;
 		}
+
+		function getFields(type, ver, bites) {
+			var result = [];
+			let len;
+			if (type == 0) {
+				result.push("0001");
+				if (ver <= 9) {
+					len = 10;
+				} else if (ver <= 26) {
+					len = 12;
+				} else {
+					len = 14;
+				}
+				let count = 0;
+				for (let i = 0; i < bites.length; i++) {
+					if (bites[i].length == 10) {
+						count += 3;
+					} else if (bites[i].length == 7) {
+						count += 2;
+					} else {
+						count += 1;
+					}
+				}
+				let bin = (count).toString(2);
+				result.push("0".repeat(len - bin.length) + bin);
+			} else if (type == 1) {
+				result.push("0010");
+				if (ver <= 9) {
+					len = 9;
+				} else if (ver <= 26) {
+					len = 11;
+				} else {
+					len = 13;
+				}
+				let bin = bites.length.toString(2);
+				result.push("0".repeat(len - bin.length) + bin);
+			} else if (type == 2) {
+				result.push("0100");
+				if (ver <= 9) {
+					len = 8;
+				} else if (ver <= 26) {
+					len = 16;
+				} else {
+					len = 16;
+				}
+				let bin = (bites.join('').length / 8).toString(2);
+				result.push("0".repeat(len - bin.length) + bin);
+			}
+			return result;
+		}
+
+		function calcVersion(bits, cor) {
+			let targetLen = bits.join('').length;
+			for (let i = 1; i <= 40; i++) {
+				if (getNumDataCodewords(i, cor) >= targetLen) {
+					return i;
+				}
+			}
+		}
+
+		function fillData(bits, ver, cor) {
+			let targetLen = getNumRawDataModules(ver, cor);
+			let result = bits.join('');
+			result += "0".repeat(8 - result.length % 8);
+			let i = 0;
+			while (result.length < targetLen) {
+				result += (i % 2 == 0) ? "11101100" : "00010001";
+				i++;
+			}
+			return result;
+		}
+
+		function blockify(bits, ver, cor) {
+			let bytes = [];
+			for (let i = 0; i < bits.length; i += 8) {
+				bytes.push(bits.substr(i, 8));
+			}
+			let blocksCount = NUM_ERROR_CORRECTION_BLOCKS[cor][ver];
+			let bytesPerBlock = parseInt(bytes.length / blocksCount);
+			let extendedBlockCount = bytes.length % blocksCount;
+
+			let result = [];
+			for (let i = 0; i < blocksCount; i++) {
+				result.push([]);
+				for (let j = 0; j < bytesPerBlock + (blocksCount - i <= extendedBlockCount ? 1 : 0); j++) {
+					result[i].push(bytes.shift());
+				}
+			}
+			return result;
+		}
+
+		function getCorrData(blocks, ver, cor) {
+			let result = [];
+			let rs = new ReedSolomonGenerator(ECC_CODEWORDS_PER_BLOCK[cor][ver]);
+			for (let i = 0; i < blocks.length; i++) {
+				let bin = parseInt(rs.getRemainder(blocks[i].map(c => parseInt(c, 2)))).toString(2);
+				result.push("0".repeat(8 - bin.length % 8) + bin);
+			}
+			return result;
+		}
+
+		let field = {};
+
+		function drawCode(blocks, ver, cor, scale, canvas) {
+			let $c = $(canvas);
+			let size = (ver * 4 + 17);
+			$c.attr("width", size * scale);
+			$c.attr("height", size * scale);
+			const ctx = canvas.getContext("2d");
+			ctx.fillStyle = '#fff';
+			ctx.fillRect(0, 0, size * scale, size * scale);
+			let field = [];
+			let uField = [];
+			for (let i = 0; i < size; i++) {
+				field.push([]);
+				for (let j = 0; j < size; j++) {
+					field[i].push(false);
+				}
+			}
+			console.log(field);
+
+			uField = new Array(field);
+			console.log(uField);
+			drawPosPattern(field, uField);
+			drawField(field, scale, ctx);
+		}
+
+		function drawFinderPattern(field, uField, x, y) {
+			const size = field.length;
+			for (var dy = -4; dy <= 4; dy++) {
+				for (var dx = -4; dx <= 4; dx++) {
+					var dist = Math.max(Math.abs(dx), Math.abs(dy)); // Chebyshev/infinity norm
+					var xx = x + dx,
+						yy = y + dy;
+					if (0 <= xx && xx < size && 0 <= yy && yy < size) {
+						uField[xx][yy] = true;
+						if (dist != 2 && dist != 4) {
+							field[xx][yy] = true;
+						}
+					}
+				}
+			}
+			console.log(field);
+		}
+
+		function drawPosPattern(field, uField) {
+			const size = field.length;
+			drawFinderPattern(field, uField, 0, 0);
+		}
+
+		function drawField(field, scale, ctx) {
+			ctx.fillStyle = '#000';
+			for (let i = 0; i < field.length; i++) {
+				for (let j = 0; j < field.length; j++) {
+					if (field[i][j]) {
+						ctx.fillRect(i * scale, j * scale, scale, scale);
+					}
+				}
+			}
+		}
 	</script>
 	<div class="reveal">
 
 		<!-- Any section element inside of this container is displayed as a slide -->
 		<div class="slides">
+			<section>
+				<h1>Демо</h1>
+				<div id="0-0-input" class='edit' contenteditable="true"
+					style="background-color: white; color: black; margin-bottom: 5px">
+				</div>
+				<canvas id="demo-code"></canvas>
+				<script>
+					$('#0-0-input').keyup((e) => {
+						const me = $(e.target);
+						const text = me.text();
+						let bin = stringNum2Bin(text);
+						var cor = 0;
+						bin = bin.concat(getFields(0, 1, bin));
+						var ver = calcVersion(bin, cor);
+						let filled = fillData(bin, ver, cor);
+						let blocks = blockify(filled, ver, cor);
+						let corrData = getCorrData(blocks, ver, cor);
+						drawCode(blocks, ver, cor, 10, document.getElementById('demo-code'))
+					});
+				</script>
+			</section>
 			<section>
 				<h1>Генерация QR кодов</h1>
 				<img src='./lib/images/qrcode.svg' style="width:300px" />
@@ -236,7 +372,6 @@
 					</p>
 					<div id="2-2-input" class='edit' contenteditable="true" style="background-color: white; margin-bottom: 5px">
 					</div>
-
 					<div id="2-2-output" class='edit' style="background-color: grey; height: 160px; overflow-wrap: break-word;">
 					</div>
 					<script>
@@ -379,15 +514,26 @@
 							H - 30%
 						</li>
 					</ul>
+					<br>
+					<br>
+				</section>
+				<section>
+					<h3>
+						Версия
+					</h3>
+					<p>От 1 до 40</p>
+					<img src='lib/images/qrv1.png'>
+					<img src='lib/images/qrv40.png' style="width:50%">
+				</section>
+				<section>
+					<img src='lib/images/ver_talbe.png' style="height:600px">
+				</section>
+				<section>
+					<h1>Интерактивная считалка версии</h1>
 				</section>
 			</section>
 			<section>
-				<h1>Reveal.js</h1>
-				<h3>The HTML Presentation Framework</h3>
-				<p>
-					<small>Created by <a href="http://hakim.se">Hakim El Hattab</a> and <a
-							href="https://github.com/hakimel/reveal.js/graphs/contributors">contributors</a></small>
-				</p>
+				<h1>Добавление служебных полей</h1>
 			</section>
 
 			<section>
