@@ -211,11 +211,12 @@
 		}
 
 		function fillData(bits, ver, cor) {
-			let targetLen = getNumRawDataModules(ver, cor);
+			let targetLen = getNumDataCodewords(ver, cor);
 			let result = bits.join('');
+
 			result += "0".repeat(8 - result.length % 8);
 			let i = 0;
-			while (result.length < targetLen) {
+			while (result.length < targetLen * 8) {
 				result += (i % 2 == 0) ? "11101100" : "00010001";
 				i++;
 			}
@@ -250,21 +251,21 @@
 
 		function getCorrData(blocks, ver, cor) {
 			let result = [];
-			console.log(cor, ver);
+			//console.log(cor, ver);
 			let rs = new ReedSolomonGenerator(ECC_CODEWORDS_PER_BLOCK[cor][ver]);
 
 			for (var i = 0, k = 0; i < blocks.length; i++) {
-				var dat = blocks[i].splice(0, 9).map(x => parseInt(x, 2));
+				var dat = blocks[i].map(x => parseInt(x, 2));
 				console.log(dat);
 				k += dat.length;
 				var ecc = rs.getRemainder(dat);
 				result[i] = [];
 				for (let j = 0; j < ecc.length; j++) {
-					let bin = ecc[i].toString(2);
+					let bin = ecc[j].toString(2);
 					result[i].push("0".repeat(8 - bin.length) + bin);
 				}
 			}
-
+			console.log(result);
 			return result;
 		}
 
@@ -293,14 +294,14 @@
 			drawAlignmentPatterns(field, uField, ver);
 			drawVersion(field, uField, ver);
 			drawFormatBits(field, uField, 0, cor);
-			console.log(corrBlocks);
-			let dataBits = joinBlocks(blocks, corrBlocks)
+			let dataBits = joinBlocks(blocks, corrBlocks);
 			drawDataBits(field, uField, dataBits);
 
-			applyMask(field, uField, (x, y) => {
-				return ((x + y) % 2 == 0);
-			})
-
+			if (false) {
+				applyMask(field, uField, (x, y) => {
+					return ((x + y) % 2 == 0);
+				})
+			}
 			drawField(field, scale, ctx);
 		}
 
@@ -437,7 +438,7 @@
 
 		function joinBlocks(blocks, corBlocks) {
 			let result = [];
-
+			console.log(blocks);
 			for (let j = 0; j < blocks[blocks.length - 1].length; j++) {
 				for (let i = 0; i < blocks.length; i++) {
 					if (blocks[i].length >= j) {
@@ -447,6 +448,7 @@
 					}
 				}
 			}
+
 			for (let j = 0; j < corBlocks[corBlocks.length - 1].length; j++) {
 				for (let i = 0; i < corBlocks.length; i++) {
 					if (corBlocks[i].length >= j) {
@@ -465,10 +467,10 @@
 
 			let c = 0;
 			for (let i = 0; i < size / 2; i++) {
-				let x = size - i - 1;
+				let x = size - i * 2 - 1;
 				for (let j = 0; j < size; j++) {
 					let y = ((i % 2 != 0) ? j : size - j - 1);
-					for (let k = 0; k < 2; k++) {
+					for (let k = 0; k < 2 && x - k >= 0; k++) {
 						if (!uField[x - k][y]) {
 							if (c < bits.length) {
 								field[x - k][y] = bits[c];
@@ -492,12 +494,6 @@
 			}
 		}
 
-		function drawFunctionPatterns() {
-
-			// Draw configuration data
-			drawFormatBits(0); // Dummy mask value; overwritten later in the constructor
-			drawVersion();
-		}
 
 		function drawField(field, scale, ctx) {
 			ctx.fillStyle = '#000';
@@ -519,7 +515,7 @@
 				<div id="0-0-input" class='edit' contenteditable="true"
 					style="background-color: white; color: black; margin-bottom: 5px">
 				</div>
-				<canvas id="demo-code"></canvas>
+				<canvas id="demo-code" style="padding: 20px; background-color: white"></canvas>
 				<script>
 					$('#0-0-input').keyup((e) => {
 						const me = $(e.target);
