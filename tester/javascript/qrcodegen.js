@@ -107,14 +107,13 @@ var qrcodegen = new function() {
 		// Compute ECC, draw modules
 		drawFunctionPatterns();
 		var allCodewords = addEccAndInterleave(dataCodewords);
-		/*
+		
 		for (let i = 0;i < allCodewords.length;i++)
 		{
 			let bin = (allCodewords[i]).toString(2);
 			console.log("0".repeat(8 - bin.length) + bin);
 		}
-		console.log('e');
-		*/
+		
 		drawCodewords(allCodewords);
 		
 		// Do masking

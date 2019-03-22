@@ -29,6 +29,7 @@
 		document.getElementsByTagName('head')[0].appendChild(link);
 	</script>
 	<script src="lib/js/jquery.js"></script>
+	<script src="lib/js/poem.js"></script>
 	<script src="lib/js/tables.js"></script>
 	<script src="lib/js/external.js"></script>
 	<!--[if lt IE 9]>
@@ -143,7 +144,7 @@
 				} else {
 					let bin1 = toUTF8Array(str[i])[0].toString(2);
 					let bin2 = toUTF8Array(str[i])[1].toString(2);
-					bin = "0".repeat(8 - bin1.length) + bin1 + "0".repeat(8 - bin2.length) + bin2;
+					let bin = "0".repeat(8 - bin1.length) + bin1 + "0".repeat(8 - bin2.length) + bin2;
 					result.push(bin);
 				}
 
@@ -204,29 +205,27 @@
 		function calcVersion(bits, cor) {
 			let targetLen = bits.join('').length;
 			for (let i = 1; i <= 40; i++) {
-				if (getNumDataCodewords(i, cor) >= targetLen) {
+				if (getNumDataCodewords(i, cor) * 8 >= targetLen) {
 					return i;
 				}
 			}
 		}
 
 		function fillData(bits, ver, cor) {
-			let targetLen = getNumDataCodewords(ver, cor);
+			let targetLen = getNumDataCodewords(ver, cor) * 8;
 			let result = bits.join('');
 
+			result += "0".repeat(Math.min(4, targetLen - bits.length));
+
 			result += "0".repeat(8 - result.length % 8);
+			//console.log(targetLen);
+
 			let i = 0;
-			while (result.length < targetLen * 8) {
+			while (result.length < targetLen) {
 				result += (i % 2 == 0) ? "11101100" : "00010001";
 				i++;
 			}
-			/////////
-			let str = "";
-			for (let i = 0; i < result.length; i += 8) {
-				str += result.substr(i, 8) + "\n";
-			}
-			console.log(str);
-			////////
+
 			return result;
 		}
 
@@ -256,7 +255,7 @@
 
 			for (var i = 0, k = 0; i < blocks.length; i++) {
 				var dat = blocks[i].map(x => parseInt(x, 2));
-				console.log(dat);
+				//console.log(dat);
 				k += dat.length;
 				var ecc = rs.getRemainder(dat);
 				result[i] = [];
@@ -265,20 +264,20 @@
 					result[i].push("0".repeat(8 - bin.length) + bin);
 				}
 			}
-			console.log(result);
+			//console.log(result);
 			return result;
 		}
 
 		let field = {};
 
-		function drawCode(blocks, corrBlocks, ver, cor, scale, canvas) {
+		function drawCode(blocks, corrBlocks, ver, cor, mask, scale, canvas) {
 			let $c = $(canvas);
 			let size = (ver * 4 + 17);
-			$c.attr("width", size * scale);
-			$c.attr("height", size * scale);
+			$c.attr("width", (size + 8) * scale);
+			$c.attr("height", (size + 8) * scale);
 			const ctx = canvas.getContext("2d");
 			ctx.fillStyle = '#fff';
-			ctx.fillRect(0, 0, size * scale, size * scale);
+			ctx.fillRect(0, 0, (size + 8) * scale, (size + 8) * scale);
 			let field = [];
 			let uField = [];
 			for (let i = 0; i < size; i++) {
@@ -293,14 +292,14 @@
 			drawPosPatterns(field, uField, ver);
 			drawAlignmentPatterns(field, uField, ver);
 			drawVersion(field, uField, ver);
-			drawFormatBits(field, uField, 0, cor);
+			drawFormatBits(field, uField, mask, cor);
+			//console.log(blocks);
 			let dataBits = joinBlocks(blocks, corrBlocks);
 			drawDataBits(field, uField, dataBits);
 
-			if (false) {
-				applyMask(field, uField, (x, y) => {
-					return ((x + y) % 2 == 0);
-				})
+
+			if (true) {
+				applyMask(field, uField, masks[mask])
 			}
 			drawField(field, scale, ctx);
 		}
@@ -413,10 +412,10 @@
 				uField[8][i] = 5;
 			}
 
-			uField[8][7] = uField[8][8] = uField[8][9] = 5;
+			uField[8][7] = uField[8][8] = uField[7][8] = 5;
 			field[8][7] = getBit(bits, 6);
 			field[8][8] = getBit(bits, 7);
-			field[8][9] = getBit(bits, 8);
+			field[7][8] = getBit(bits, 8);
 
 			for (var i = 9; i < 15; i++) {
 				uField[14 - i][8] = 5;
@@ -438,10 +437,9 @@
 
 		function joinBlocks(blocks, corBlocks) {
 			let result = [];
-			console.log(blocks);
 			for (let j = 0; j < blocks[blocks.length - 1].length; j++) {
 				for (let i = 0; i < blocks.length; i++) {
-					if (blocks[i].length >= j) {
+					if (blocks[i][j]) {
 						for (let k = 0; k < 8; k++) {
 							result.push(blocks[i][j][k] == '1' ? true : false);
 						}
@@ -451,7 +449,7 @@
 
 			for (let j = 0; j < corBlocks[corBlocks.length - 1].length; j++) {
 				for (let i = 0; i < corBlocks.length; i++) {
-					if (corBlocks[i].length >= j) {
+					if (corBlocks[i][j]) {
 						for (let k = 0; k < 8; k++) {
 							result.push(corBlocks[i][j][k] == '1' ? true : false);
 						}
@@ -465,9 +463,18 @@
 		function drawDataBits(field, uField, bits) {
 			const size = field.length;
 
+			let str = "";
+			for (let i = 0; i < bits.length; i += 8) {
+				str += bits.slice(i, i + 8).map(x => x ? '1' : '0').join('') + "\n";
+			}
+			//console.log(str);
+
 			let c = 0;
 			for (let i = 0; i < size / 2; i++) {
 				let x = size - i * 2 - 1;
+				if (x <= 6) {
+					x--;
+				}
 				for (let j = 0; j < size; j++) {
 					let y = ((i % 2 != 0) ? j : size - j - 1);
 					for (let k = 0; k < 2 && x - k >= 0; k++) {
@@ -487,7 +494,7 @@
 			const size = field.length;
 			for (let i = 0; i < size; i++) {
 				for (let j = 0; j < size; j++) {
-					if (uField[i][j] != 1 && mask(i, j)) {
+					if (uField[i][j] == 6 && !mask(i, j)) {
 						field[i][j] = !field[i][j];
 					}
 				}
@@ -497,9 +504,9 @@
 
 		function drawField(field, scale, ctx) {
 			ctx.fillStyle = '#000';
-			for (let i = 0; i < field.length; i++) {
-				for (let j = 0; j < field.length; j++) {
-					if (field[i][j]) {
+			for (let i = 4; i < field.length + 4; i++) {
+				for (let j = 4; j < field.length + 4; j++) {
+					if (field[i - 4][j - 4]) {
 						ctx.fillRect(i * scale, j * scale, scale, scale);
 					}
 				}
@@ -513,27 +520,37 @@
 			<section>
 				<h1>Демо</h1>
 				<div id="0-0-input" class='edit' contenteditable="true"
-					style="background-color: white; color: black; margin-bottom: 5px">
+					style="background-color: white; color: black; margin-bottom: 5px; font-size: 5px">
 				</div>
-				<canvas id="demo-code" style="padding: 20px; background-color: white"></canvas>
+				<canvas id="demo-code"></canvas>
 				<script>
 					$('#0-0-input').keyup((e) => {
 						const me = $(e.target);
 						const text = me.text();
 						let bin = stringNum2Bin(text);
-						var cor = 0;
-						bin = getFields(0, 1, bin).concat(bin);
+						var cor = 3;
 						var ver = calcVersion(bin, cor);
+						bin = getFields(0, ver, bin).concat(bin);
 						let filled = fillData(bin, ver, cor);
 						let blocks = blockify(filled, ver, cor);
 						let corrBlocks = getCorrData(blocks, ver, cor);
-						drawCode(blocks, corrBlocks, ver, cor, 10, document.getElementById('demo-code'))
+						drawCode(blocks, corrBlocks, ver, cor, 0, 5, document.getElementById('demo-code'))
 					});
 				</script>
 			</section>
 			<section>
 				<h1>Генерация QR кодов</h1>
-				<img src='./lib/images/qrcode.svg' style="width:300px" />
+				<canvas id="0-0-qr"></canvas>
+				<script>
+					let bin = string2Bin("Продам гараж");
+					var cor = 0;
+					var ver = calcVersion(bin, cor);
+					bin = getFields(2, ver, bin).concat(bin);
+					let filled = fillData(bin, ver, cor);
+					let blocks = blockify(filled, ver, cor);
+					let corrBlocks = getCorrData(blocks, ver, cor);
+					drawCode(blocks, corrBlocks, ver, cor, 0, 10, document.getElementById('0-0-qr'))
+				</script>
 			</section>
 			<section>
 				<h2>Этапы генерации QR кода</h1>
@@ -733,8 +750,33 @@
 						Версия
 					</h3>
 					<p>От 1 до 40</p>
-					<img src='lib/images/qrv1.png'>
-					<img src='lib/images/qrv40.png' style="width:50%">
+
+				</section>
+				<section>
+					<canvas id="6-4-qr-1"></canvas>
+					<script>
+						bin = string2Bin("hi");
+						var cor = 0;
+						var ver = calcVersion(bin, cor);
+						bin = getFields(2, ver, bin).concat(bin);
+						filled = fillData(bin, ver, cor);
+						blocks = blockify(filled, ver, cor);
+						corrBlocks = getCorrData(blocks, ver, cor);
+						drawCode(blocks, corrBlocks, ver, cor, 0, 10, document.getElementById('6-4-qr-1'))
+					</script>
+				</section>
+				<section>
+					<canvas id="6-5-qr"></canvas>
+					<script>
+						bin = string2Bin(poem);
+						var cor = 0;
+						var ver = 40;
+						bin = getFields(2, ver, bin).concat(bin);
+						filled = fillData(bin, ver, cor);
+						blocks = blockify(filled, ver, cor);
+						corrBlocks = getCorrData(blocks, ver, cor);
+						drawCode(blocks, corrBlocks, ver, cor, 0, 3, document.getElementById('6-5-qr'))
+					</script>
 				</section>
 				<section>
 					<img src='lib/images/ver_talbe.png' style="height:600px">
