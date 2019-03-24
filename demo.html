@@ -152,18 +152,39 @@
 			return result;
 		}
 
+		function getFieldsLen(type, ver) {
+			if (type == 0) {
+				if (ver <= 9) {
+					return 10;
+				} else if (ver <= 26) {
+					return 12;
+				} else {
+					return 14;
+				}
+			} else if (type == 1) {
+				if (ver <= 9) {
+					return 9;
+				} else if (ver <= 26) {
+					return 11;
+				} else {
+					return 13;
+				}
+			} else if (type == 2) {
+				if (ver <= 9) {
+					return 8;
+				} else if (ver <= 26) {
+					return 16;
+				} else {
+					return 16;
+				}
+			}
+		}
+
 		function getFields(type, ver, bites) {
 			var result = [];
-			let len;
+			let len = getFieldsLen(type, ver)
 			if (type == 0) {
 				result.push("0001");
-				if (ver <= 9) {
-					len = 10;
-				} else if (ver <= 26) {
-					len = 12;
-				} else {
-					len = 14;
-				}
 				let count = 0;
 				for (let i = 0; i < bites.length; i++) {
 					if (bites[i].length == 10) {
@@ -178,34 +199,21 @@
 				result.push("0".repeat(len - bin.length) + bin);
 			} else if (type == 1) {
 				result.push("0010");
-				if (ver <= 9) {
-					len = 9;
-				} else if (ver <= 26) {
-					len = 11;
-				} else {
-					len = 13;
-				}
 				let bin = bites.length.toString(2);
 				result.push("0".repeat(len - bin.length) + bin);
 			} else if (type == 2) {
 				result.push("0100");
-				if (ver <= 9) {
-					len = 8;
-				} else if (ver <= 26) {
-					len = 16;
-				} else {
-					len = 16;
-				}
 				let bin = (bites.join('').length / 8).toString(2);
 				result.push("0".repeat(len - bin.length) + bin);
 			}
+			//console.log(result);
 			return result;
 		}
 
-		function calcVersion(bits, cor) {
+		function calcVersion(bits, type, cor) {
 			let targetLen = bits.join('').length;
 			for (let i = 1; i <= 40; i++) {
-				if (getNumDataCodewords(i, cor) * 8 >= targetLen) {
+				if (getNumDataCodewords(i, cor) * 8 >= targetLen + getFieldsLen(type, i) + 4) {
 					return i;
 				}
 			}
@@ -214,10 +222,9 @@
 		function fillData(bits, ver, cor) {
 			let targetLen = getNumDataCodewords(ver, cor) * 8;
 			let result = bits.join('');
+			result += "0".repeat(Math.min(4, targetLen - result.length));
 
-			result += "0".repeat(Math.min(4, targetLen - bits.length));
-
-			result += "0".repeat(8 - result.length % 8);
+			result += "0".repeat((8 - result.length % 8) % 8);
 			//console.log(targetLen);
 
 			let i = 0;
@@ -512,6 +519,19 @@
 				}
 			}
 		}
+
+		function getBestType(text) {
+			let num = stringNum2Bin(text);
+			let mix = stringMix2Bin(text);
+			let bin = string2Bin(text);
+			if (text == "" || num[0][0] != "Н") {
+				return 0;
+			} else if (mix[0][0] != "Н") {
+				return 1;
+			} else {
+				return 2;
+			}
+		}
 	</script>
 	<div class="reveal">
 
@@ -528,9 +548,10 @@
 						const me = $(e.target);
 						const text = me.text();
 						let bin = stringNum2Bin(text);
-						var cor = 3;
-						var ver = calcVersion(bin, cor);
-						bin = getFields(0, ver, bin).concat(bin);
+						var cor = 0;
+						var type = 0;
+						var ver = calcVersion(bin, type, cor);
+						bin = getFields(type, ver, bin).concat(bin);
 						let filled = fillData(bin, ver, cor);
 						let blocks = blockify(filled, ver, cor);
 						let corrBlocks = getCorrData(blocks, ver, cor);
@@ -544,8 +565,9 @@
 				<script>
 					let bin = string2Bin("Продам гараж");
 					var cor = 0;
-					var ver = calcVersion(bin, cor);
-					bin = getFields(2, ver, bin).concat(bin);
+					var type = 2;
+					var ver = calcVersion(bin, type, cor);
+					bin = getFields(type, ver, bin).concat(bin);
 					let filled = fillData(bin, ver, cor);
 					let blocks = blockify(filled, ver, cor);
 					let corrBlocks = getCorrData(blocks, ver, cor);
@@ -565,9 +587,9 @@
 			</section>
 			<section>
 				<section>
-					<h2>
+					<h1>
 						Кодирование данных
-					</h2>
+					</h1>
 				</section>
 				<section>
 					<h3>
@@ -720,8 +742,13 @@
 			</section>
 			<section>
 				<section>
+					<h1>
+						Добавление служебной информации и заполнения
+					</h1>
+				</section>
+				<section>
 					<h2>
-						Добавление служебной информации
+						Выбор уровня коррекции и версии
 					</h2>
 				</section>
 				<section>
@@ -749,40 +776,158 @@
 					<h3>
 						Версия
 					</h3>
-					<p>От 1 до 40</p>
+					</h4>От 1 до 40</h4>
+				</section>
+				<section>
+					<div>
+						<input type="number" id="6-4-input" min="1" max="40"
+							style="height: 20px; margin: 5px auto; display: block" value='1'>
+					</div>
+					<div style="display: flex; justify-content: center; width: 100%">
+						<canvas id="6-4-qr-1"></canvas>
+						<code id="6-4-output" class="hljs" style="font-size: 12px; width: inherit"></code>
+					</div>
+					<script>
+						function upd64(ver) {
+							let bitsPosible = getNumDataCodewords(ver, 2) * 8 - 4 - getFieldsLen(2, ver);
+							let poemPart = poem.substr(0, parseInt(bitsPosible / 8));
+							$("#6-4-output").text(poemPart);
+							bin = string2Bin(poemPart);
+							var cor = 0;
+							var type = 2;
+							bin = getFields(2, ver, bin).concat(bin);
+							filled = fillData(bin, ver, cor);
+							blocks = blockify(filled, ver, cor);
+							corrBlocks = getCorrData(blocks, ver, cor);
+							drawCode(blocks, corrBlocks, ver, cor, 0, 2, document.getElementById('6-4-qr-1'))
+						}
+						$("#6-4-input").change(function (e) {
+							let ver = $(e.target).val();
+							upd64(ver);
+						});
+						upd64(1);
+					</script>
+				</section>
+				<section>
+					<div id="f6-6-table-div">
+						<table id="f6-6-table">
+							<thead>
+								<tr>
+									<th>Версия</th>
+									<th>Моудлей</th>
+									<th>Уровень коррекции</th>
+									<th>Бит данных</th>
+									<th>Цифровое</th>
+									<th>Буквенно-цифровое</th>
+									<th>Побайтовое</th>
+								</tr>
+							</thead>
+							<tbody>
 
-				</section>
-				<section>
-					<canvas id="6-4-qr-1"></canvas>
+							</tbody>
+						</table>
+					</div>
+					<style>
+						#f6-6-table {
+							font-size: 15px;
+						}
+
+						#f6-6-table-div {
+							height: 60vh;
+							overflow-y: scroll;
+						}
+
+						#f6-6-table td {
+							text-align: center;
+							vertical-align: middle;
+						}
+
+						#f6-6-table tr:nth-child(2n) {
+							background-color: rgba(255, 255, 255, 0.3);
+						}
+					</style>
 					<script>
-						bin = string2Bin("hi");
-						var cor = 0;
-						var ver = calcVersion(bin, cor);
-						bin = getFields(2, ver, bin).concat(bin);
-						filled = fillData(bin, ver, cor);
-						blocks = blockify(filled, ver, cor);
-						corrBlocks = getCorrData(blocks, ver, cor);
-						drawCode(blocks, corrBlocks, ver, cor, 0, 10, document.getElementById('6-4-qr-1'))
+						for (let i = 1; i <= 40; i++) {
+							let row = $('<tr></tr>');
+							row.append($(`<td rowspan=4>${i}</td>`));
+							row.append($(`<td rowspan=4>${i * 4 + 17}</td>`));
+
+							for (let j = 0; j < 4; j++) {
+								if (j != 0) {
+									row = $('<tr></tr>');
+								}
+								row.append($(`<td>${corrLetters[j]}</td>`));
+								let bits = getNumDataCodewords(i, j) * 8;
+								row.append($(`<td>${bits}</td>`));
+								bits -= 4;
+								const num = bits - getFieldsLen(0, i),
+									mixed = bits - getFieldsLen(1, i),
+									bin = bits - getFieldsLen(2, i);
+								const numRem = num % 10,
+									mixedRem = mixed % 11;
+								row.append($(`<td>${parseInt(num / 10) * 3 + (numRem ? (numRem >= 7 ? 2 : 1) : 0)}</td>`));
+								row.append($(`<td>${parseInt(mixed / 11) * 2 + (mixedRem ? 1 : 0)}</td>`));
+								row.append($(`<td>${parseInt(bin / 8)}</td>`));
+								$('#f6-6-table>tbody').append(row);
+							}
+						}
 					</script>
 				</section>
 				<section>
-					<canvas id="6-5-qr"></canvas>
+					<input type="text" id="6-7-input-1">
+					<br>
+					<span id="6-7-output-1">Длинна: 0</span>
+					<br>
+					<span id="6-7-output-2">Тип: Цифровое</span>
+					<br>
+					<button class="f6-7-input-2" level="0" disabled>L</button>
+					<button class="f6-7-input-2" level="1">M</button>
+					<button class="f6-7-input-2" level="2">Q</button>
+					<button class="f6-7-input-2" level="3">H</button>
+
+
+					<br>
+					<span id="6-7-output-3">Версия: 1</span>
 					<script>
-						bin = string2Bin(poem);
-						var cor = 0;
-						var ver = 40;
-						bin = getFields(2, ver, bin).concat(bin);
-						filled = fillData(bin, ver, cor);
-						blocks = blockify(filled, ver, cor);
-						corrBlocks = getCorrData(blocks, ver, cor);
-						drawCode(blocks, corrBlocks, ver, cor, 0, 3, document.getElementById('6-5-qr'))
+						$('#6-7-input-1').keyup((e) => {
+							upd67();
+						});
+
+						$('.f6-7-input-2').click(function () {
+							$(".f6-7-input-2").removeAttr('disabled');
+							$(this).attr('disabled', 'true');
+							upd67();
+						});
+
+						function upd67() {
+							const text = $("#6-7-input-1").val();
+
+							let num = stringNum2Bin(text);
+							let mix = stringMix2Bin(text);
+							let bin = string2Bin(text);
+
+							let type = getBestType(text),
+								len,
+								cor = $('.f6-7-input-2[disabled]').attr('level');
+
+							if (type <= 1) {
+								len = text.length;
+							} else {
+								let bin = string2Bin(text);
+								len = bin.join('').length / 8;
+							}
+
+							$("#6-7-output-1").text(`Длинна: ${len}`);
+							$("#6-7-output-2").text(`Тип: ${["Цифровое", "Буквенно-цифровое", "Побайтовое"][type]}`);
+							$("#6-7-output-3").text(`Версия: ${calcVersion([num, mix, bin][type], type, cor)}`);
+						}
 					</script>
-				</section>
-				<section>
-					<img src='lib/images/ver_talbe.png' style="height:600px">
-				</section>
-				<section>
-					<h1>Интерактивная считалка версии</h1>
+					<style>
+						.f6-7-input-2 {
+							height: 50px;
+							width: 50px;
+						}
+					</style>
 				</section>
 			</section>
 			<section>
