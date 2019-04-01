@@ -39,8 +39,8 @@
 
 <body>
 	<script>
-		const colors = ['#e6194b', '#3cb44b', '#ffe119', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c',
-			'#fabebe', '#008080', '#e6beff', '#9a6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075'
+		const colors = ['#e6194b', '#3cb44b', '#9a6324', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c',
+			'#fabebe', '#008080', '#e6beff', '#ffe119', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075'
 		];
 
 		function coursorToEnd(div) {
@@ -199,7 +199,15 @@
 				result.push("0".repeat(len - bin.length) + bin);
 			} else if (type == 1) {
 				result.push("0010");
-				let bin = bites.length.toString(2);
+				let count = 0;
+				for (let i = 0; i < bites.length; i++) {
+					if (bites[i].length == 11) {
+						count += 2;
+					} else {
+						count += 1;
+					}
+				}
+				let bin = count.toString(2);
 				result.push("0".repeat(len - bin.length) + bin);
 			} else if (type == 2) {
 				result.push("0100");
@@ -833,7 +841,7 @@
 						}
 
 						#f6-6-table-div {
-							height: 60vh;
+							height: 70vh;
 							overflow-y: scroll;
 						}
 
@@ -874,7 +882,7 @@
 					</script>
 				</section>
 				<section>
-					<input type="text" id="6-7-input-1">
+					<input type="text" id="6-7-input-1" style="width: 100%">
 					<br>
 					<span id="6-7-output-1">Длинна: 0</span>
 					<br>
@@ -929,9 +937,194 @@
 						}
 					</style>
 				</section>
-			</section>
-			<section>
-				<h1>Добавление служебных полей</h1>
+				<section>
+					<h2>
+						Добавление служебных полей
+					</h2>
+				</section>
+				<section>
+					<table style="font-size: 23px">
+						<thead>
+							<th>Способ кодирования</th>
+							<th>Код способа</th>
+							<th>Версия 1–9</th>
+							<th>Версия 10–26</th>
+							<th>Версия 27–40</th>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Цифровое</td>
+								<td>0001</td>
+								<td>10 бит</td>
+								<td>12 бит</td>
+								<td>14 бит</td>
+							</tr>
+							<tr>
+								<td>Буквенно-цифровое</td>
+								<td>0010</td>
+								<td>9 бит</td>
+								<td>11 бит</td>
+								<td>13 бит</td>
+							</tr>
+							<tr>
+								<td>Побайтовое</td>
+								<td>0100</td>
+								<td>8 бит</td>
+								<td>16 бит</td>
+								<td>16 бит</td>
+							</tr>
+						</tbody>
+					</table>
+
+				</section>
+				<section>
+					<input type="text" id="6-9-input-1" style="width: 100%">
+					<br>
+					<span id="6-9-output-1">Длинна: 0</span>
+					<br>
+					<span id="6-9-output-2">Тип: Цифровое</span>
+					<br>
+					<button class="f6-9-input-2" level="0" disabled>L</button>
+					<button class="f6-9-input-2" level="1">M</button>
+					<button class="f6-9-input-2" level="2">Q</button>
+					<button class="f6-9-input-2" level="3">H</button>
+					<br>
+					<span id="6-9-output-3">Версия: 1</span>
+					<div id="6-9-output-4" class='edit'
+						style="background-color: grey; height: 50px; overflow-wrap: break-word; margin-bottom: 20px">
+					</div>
+					<script>
+						$('#6-9-input-1').keyup((e) => {
+							upd69();
+						});
+
+						$('.f6-9-input-2').click(function () {
+							$(".f6-9-input-2").removeAttr('disabled');
+							$(this).attr('disabled', 'true');
+							upd69();
+						});
+
+						function upd69() {
+							const text = $("#6-9-input-1").val();
+
+							let num = stringNum2Bin(text);
+							let mix = stringMix2Bin(text);
+							let bin = string2Bin(text);
+
+							let type = getBestType(text),
+								len,
+								cor = $('.f6-9-input-2[disabled]').attr('level');
+
+							if (type <= 1) {
+								len = text.length;
+							} else {
+								let bin = string2Bin(text);
+								len = bin.join('').length / 8;
+							}
+							bin = [num, mix, bin][type];
+							let ver = calcVersion(bin, type, cor);
+							$("#6-9-output-1").text(`Длинна: ${len}`);
+							$("#6-9-output-2").text(`Тип: ${["Цифровое", "Буквенно-цифровое", "Побайтовое"][type]}`);
+							$("#6-9-output-3").text(`Версия: ${ver}`);
+							let fields = getFields(type, ver, bin);
+							$('#6-9-output-4').html('');
+							for (let i = 0; i < fields.length; i++) {
+								$('#6-9-output-4').append($(
+									`<span style='color:${colors[i % colors.length]}'>${fields[i]}</span>`
+								));
+							}
+						}
+					</script>
+					<style>
+						.f6-9-input-2 {
+							height: 50px;
+							width: 50px;
+						}
+					</style>
+				</section>
+				<section>
+					<h2>
+						Заполнение
+					</h2>
+				</section>
+				<section>
+					<h2>
+						<p style='font-size: 30px'>
+							Алгоритм: Сначала мы добавляем в конец последовательности 4 нуля(или столько, сколько
+							возможно без увеличения версии), затем мы добавляем столько нулей, сколько необходимо,
+							чтобы длинна последовательности стала кратна 8. И наконец если у нас получилось меньше бит
+							чем нужно в текущей версии, мы дополняем последовательность чередующимися байтами 11101100 и
+							00010001
+						</p>
+					</h2>
+				</section>
+				<section>
+					<section>
+						<input type="text" id="6-11-input-1" style="width: 100%">
+						<br>
+						<span id="6-11-output-1">Длинна: 0</span>
+						<br>
+						<span id="6-11-output-2">Тип: Цифровое</span>
+						<br>
+						<button class="f6-11-input-2" level="0" disabled>L</button>
+						<button class="f6-11-input-2" level="1">M</button>
+						<button class="f6-11-input-2" level="2">Q</button>
+						<button class="f6-11-input-2" level="3">H</button>
+						<br>
+						<span id="6-11-output-3">Версия: 1</span>
+						<div id="6-11-output-4" class='edit'
+							style="background-color: grey; height: 50px; overflow-wrap: break-word; margin-bottom: 20px">
+						</div>
+						<script>
+							$('#6-11-input-1').keyup((e) => {
+								upd611();
+							});
+
+							$('.f6-11-input-2').click(function () {
+								$(".f6-11-input-2").removeAttr('disabled');
+								$(this).attr('disabled', 'true');
+								upd611();
+							});
+
+							function upd611() {
+								const text = $("#6-11-input-1").val();
+
+								let num = stringNum2Bin(text);
+								let mix = stringMix2Bin(text);
+								let bin = string2Bin(text);
+
+								let type = getBestType(text),
+									len,
+									cor = $('.f6-11-input-2[disabled]').attr('level');
+
+								if (type <= 1) {
+									len = text.length;
+								} else {
+									let bin = string2Bin(text);
+									len = bin.join('').length / 8;
+								}
+								bin = [num, mix, bin][type];
+								let ver = calcVersion(bin, type, cor);
+								$("#6-11-output-1").text(`Длинна: ${len}`);
+								$("#6-11-output-2").text(`Тип: ${["Цифровое", "Буквенно-цифровое", "Побайтовое"][type]}`);
+								$("#6-11-output-3").text(`Версия: ${ver}`);
+								let fields = getFields(type, ver, bin);
+								$('#6-11-output-4').html('');
+								for (let i = 0; i < fields.length; i++) {
+									$('#6-11-output-4').append($(
+										`<span style='color:${colors[i % colors.length]}'>${fields[i]}</span>`
+									));
+								}
+							}
+						</script>
+						<style>
+							.f6-11-input-2 {
+								height: 50px;
+								width: 50px;
+							}
+						</style>
+					</section>
+				</section>
 			</section>
 
 			<section>
