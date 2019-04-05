@@ -32,6 +32,12 @@
 	<script src="lib/js/poem.js"></script>
 	<script src="lib/js/tables.js"></script>
 	<script src="lib/js/external.js"></script>
+	<style>
+		.edit {
+			overflow-y: auto;
+			text-align: left;
+		}
+	</style>
 	<!--[if lt IE 9]>
 		<script src="lib/js/html5shiv.js"></script>
 		<![endif]-->
@@ -39,8 +45,9 @@
 
 <body>
 	<script>
-		const colors = ['#e6194b', '#3cb44b', '#9a6324', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c',
-			'#fabebe', '#008080', '#e6beff', '#ffe119', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075'
+		const colors = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#46f0f0', '#f032e6', '#bcf60c',
+			'#fabebe', '#008080', '#e6beff', '#ffe119', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075',
+			'#9a6324'
 		];
 
 		function coursorToEnd(div) {
@@ -1073,7 +1080,7 @@
 						<br>
 						<span id="6-11-output-3">Версия: 1</span>
 						<div id="6-11-output-4" class='edit'
-							style="background-color: grey; height: 50px; overflow-wrap: break-word; margin-bottom: 20px">
+							style="background-color: grey; height: 350px; overflow-wrap: break-word; margin-bottom: 20px">
 						</div>
 						<script>
 							$('#6-11-input-1').keyup((e) => {
@@ -1108,11 +1115,15 @@
 								$("#6-11-output-1").text(`Длинна: ${len}`);
 								$("#6-11-output-2").text(`Тип: ${["Цифровое", "Буквенно-цифровое", "Побайтовое"][type]}`);
 								$("#6-11-output-3").text(`Версия: ${ver}`);
+
 								let fields = getFields(type, ver, bin);
+								let filler = fillData(fields.concat(bin), ver, cor).substr(bin.join('').length + fields.join('').length);
+								let data = [fields.join(''), bin.join(''), filler];
+
 								$('#6-11-output-4').html('');
-								for (let i = 0; i < fields.length; i++) {
+								for (let i = 0; i < data.length; i++) {
 									$('#6-11-output-4').append($(
-										`<span style='color:${colors[i % colors.length]}'>${fields[i]}</span>`
+										`<span style='color:${colors[i % colors.length]}'>${data[i]}</span>`
 									));
 								}
 							}
@@ -1128,12 +1139,14 @@
 			</section>
 
 			<section>
-				<h2>Hello There</h2>
-				<p>
-					reveal.js enables you to create beautiful interactive slide decks using HTML. This presentation will
-					show you examples of what it can do.
-				</p>
+				<section>
+					<h1>Разделение информации на блоки</h1>
+				</section>
+				<section>
+					<img src='lib/images/blocks.png' width="600px">
+				</section>
 			</section>
+
 
 			<!-- Example of nested vertical slides -->
 			<section>
