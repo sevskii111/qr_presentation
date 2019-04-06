@@ -1143,7 +1143,82 @@
 					<h1>Разделение информации на блоки</h1>
 				</section>
 				<section>
+					<p>Алгоритм</p>
+					<ol>
+						<li>Вычислить колличество блоков по таблице</li>
+						<li>Разделить получинные на предыдущем шаге биты на байты</li>
+					</ol>
+				</section>
+				<section>
 					<img src='lib/images/blocks.png' width="600px">
+				</section>
+				<section>
+					<input type="text" id="7-1-input-1" style="width: 100%">
+					<br>
+					<span id="7-1-output-1">Длинна: 0</span>
+					<br>
+					<span id="7-1-output-2">Тип: Цифровое</span>
+					<br>
+					<button class="f7-1-input-2" level="0" disabled>L</button>
+					<button class="f7-1-input-2" level="1">M</button>
+					<button class="f7-1-input-2" level="2">Q</button>
+					<button class="f7-1-input-2" level="3">H</button>
+					<br>
+					<span id="7-1-output-3">Версия: 1</span>
+					<br>
+					<span id="7-1-output-4">Колличество блоков: 1</span>
+					<br>
+					<span>Размеры блоков: <br><span id="7-1-output-5">1</span></span>
+					<script>
+						$('#7-1-input-1').keyup((e) => {
+							upd71();
+						});
+
+						$('.f7-1-input-2').click(function () {
+							$(".f7-1-input-2").removeAttr('disabled');
+							$(this).attr('disabled', 'true');
+							upd71();
+						});
+
+						function upd71() {
+							const text = $("#7-1-input-1").val();
+
+							let num = stringNum2Bin(text);
+							let mix = stringMix2Bin(text);
+							let bin = string2Bin(text);
+
+							let type = getBestType(text),
+								len,
+								cor = $('.f7-1-input-2[disabled]').attr('level');
+
+							if (type <= 1) {
+								len = text.length;
+							} else {
+								let bin = string2Bin(text);
+								len = bin.join('').length / 8;
+							}
+							bin = [num, mix, bin][type];
+							let ver = calcVersion(bin, type, cor);
+							$("#7-1-output-1").text(`Длинна: ${len}`);
+							$("#7-1-output-2").text(`Тип: ${["Цифровое", "Буквенно-цифровое", "Побайтовое"][type]}`);
+							$("#7-1-output-3").text(`Версия: ${ver}`);
+
+							let fields = getFields(type, ver, bin);
+							let filler = fillData(fields.concat(bin), ver, cor).substr(bin.join('').length + fields.join('').length);
+							let data = [fields.join(''), bin.join(''), filler];
+
+							const blocks = blockify(data.join(''), ver, cor);
+							$("#7-1-output-4").text(`Колличество блоков: ${blocks.length}`);
+							$("#7-1-output-5").text(blocks.map(b => b.length).join(','));
+
+						}
+					</script>
+					<style>
+						.f7-1-input-2 {
+							height: 50px;
+							width: 50px;
+						}
+					</style>
 				</section>
 			</section>
 
